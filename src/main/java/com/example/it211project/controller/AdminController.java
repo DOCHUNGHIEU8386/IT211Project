@@ -39,13 +39,14 @@ public class AdminController {
      */
     @GetMapping("/users")
     public ResponseEntity<ApiDataResponse<Page<UserResponse>>> getUsers(
-            @RequestParam(defaultValue = "1") Integer page) {
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(required = false) String keyword) {
 
         return ResponseEntity.ok(
                 new ApiDataResponse<>(
                         true,
                         "Get users success",
-                        userService.getAllUsers(page - 1, pageSize),
+                        userService.getAllUsers(page - 1, pageSize, keyword),
                         null,
                         HttpStatus.OK
                 )

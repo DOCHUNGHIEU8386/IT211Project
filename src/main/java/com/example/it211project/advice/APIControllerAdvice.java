@@ -82,7 +82,60 @@ public class APIControllerAdvice {
     }
 
     /**
-     * 400 - Generic exception
+     * 400 - Lỗi logic từ service (IllegalArgumentException)
+     * VD: sai mật khẩu cũ, loại file không hợp lệ, v.v.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiDataResponse<String>> handleIllegalArgument(
+            IllegalArgumentException ex) {
+
+        return new ResponseEntity<>(
+                new ApiDataResponse<>(
+                        false,
+                        "Bad request",
+                        null,
+                        ex.getMessage(),
+                        HttpStatus.BAD_REQUEST
+                ),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    /**
+     * 401 - Lỗi xác thực token
+     */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiDataResponse<String>> handleRuntimeException(
+            RuntimeException ex) {
+
+        String message = ex.getMessage();
+        // Token expired / revoked -> 401
+        if (message != null && (message.contains("expired") || message.contains("revoked"))) {
+            return new ResponseEntity<>(
+                    new ApiDataResponse<>(
+                            false,
+                            "Unauthorized",
+                            null,
+                            message,
+                            HttpStatus.UNAUTHORIZED
+                    ),
+                    HttpStatus.UNAUTHORIZED
+            );
+        }
+        return new ResponseEntity<>(
+                new ApiDataResponse<>(
+                        false,
+                        "Internal server error",
+                        null,
+                        message,
+                        HttpStatus.INTERNAL_SERVER_ERROR
+                ),
+                HttpStatus.INTERNAL_SERVER_ERROR
+        );
+    }
+
+    /**
+     * 500 - Lỗi chung không xác định
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiDataResponse<String>> handleException(
