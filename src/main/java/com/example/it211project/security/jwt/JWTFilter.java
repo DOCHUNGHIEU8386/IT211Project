@@ -1,7 +1,6 @@
 package com.example.it211project.security.jwt;
 
 import com.example.it211project.security.principal.CustomUserDetailsService;
-import com.example.it211project.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +22,6 @@ public class JWTFilter extends OncePerRequestFilter {
 
     private final JWTProvider jwtProvider;
     private final CustomUserDetailsService userDetailsService;
-    private final TokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -34,14 +32,6 @@ public class JWTFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (token != null && jwtProvider.validateToken(token)) {
-
-            // FR-13: Kiểm tra token có trong blacklist không
-            if (tokenBlacklistService.isTokenBlacklisted(token)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Token has been revoked");
-                return;
-            }
-
             String username = jwtProvider.getUsernameFromToken(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 

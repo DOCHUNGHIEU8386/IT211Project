@@ -1,5 +1,7 @@
 package com.example.it211project.service.impl;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import com.example.it211project.dto.request.SubmissionRequest;
 import com.example.it211project.dto.response.SubmissionResponse;
 import com.example.it211project.entity.Course;
@@ -12,27 +14,27 @@ import com.example.it211project.repository.SubmissionRepository;
 import com.example.it211project.repository.UserRepository;
 import com.example.it211project.service.SubmissionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SubmissionServiceImpl implements SubmissionService {
 
     private final SubmissionRepository submissionRepository;
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
+    private final Cloudinary cloudinary;
 
     @Value("${upload.submission-dir:uploads/submissions}")
     private String submissionDir;
@@ -40,7 +42,6 @@ public class SubmissionServiceImpl implements SubmissionService {
     // ==================== FR-07: Nộp bài bằng GitHub link ====================
     @Override
     public SubmissionResponse submitByLink(SubmissionRequest request) {
-        // Validate github link
         if (request.getGithubLink() == null || request.getGithubLink().isBlank()) {
             throw new IllegalArgumentException("GitHub link is required for LINK submission");
         }
@@ -64,7 +65,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         return mapToResponse(submissionRepository.save(submission));
     }
 
-    // ==================== FR-07: Nộp bài bằng file upload ====================
+    // ==================== FR-07 NÂNG CAO: Nộp bài bằng file upload lên Cloudinary ====================
     @Override
     public SubmissionResponse submitByFile(Long studentId, Long courseId,
                                            String note, MultipartFile file) {
@@ -72,8 +73,7 @@ public class SubmissionServiceImpl implements SubmissionService {
             throw new IllegalArgumentException("File is required for FILE submission");
         }
 
-        // Giới hạn kích thước và loại file
-        long maxSize = 50 * 1024 * 1024L; // 50MB
+        long maxSize = 50 * 1024 * 1024L;
         if (file.getSize() > maxSize) {
             throw new IllegalArgumentException("File size must not exceed 50MB");
         }
@@ -94,29 +94,58 @@ public class SubmissionServiceImpl implements SubmissionService {
         Course course = getCourse(courseId);
         checkDuplicate(studentId, courseId);
 
-        // Lưu file lên server
-        String storedFileName = UUID.randomUUID() + extension;
-        Path uploadPath = Paths.get(submissionDir);
-        try {
-            Files.createDirectories(uploadPath);
-            Files.copy(file.getInputStream(),
-                    uploadPath.resolve(storedFileName),
-                    StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to store file: " + e.getMessage());
+        String cloudinaryUrl = null;
+
+        // FR-07 NÂNG CAO: Upload file lên Cloudinary nếu đã cấu hình
+        if (cloudinary != null) {
+            try {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                        "folder", "it211project/submissions",
+                        "resource_type", "auto",
+                        "public_id", UUID.randomUUID().toString()
+                ));
+
+                cloudinaryUrl = uploadResult.get("secure_url").toString();
+                log.info("File uploaded to Cloudinary: {}", cloudinaryUrl);
+
+            } catch (IOException e) {
+                log.error("Failed to upload file to Cloudinary: {}", e.getMessage());
+                throw new RuntimeException("Failed to upload file to Cloudinary: " + e.getMessage());
+            }
+        } else {
+            // Fallback: Lưu local nếu chưa cấu hình Cloudinary
+            log.warn("Cloudinary not configured, saving file locally");
+            cloudinaryUrl = saveFileLocally(file, extension);
         }
 
         Submission submission = Submission.builder()
                 .student(student)
                 .course(course)
                 .fileName(originalName)
-                .filePath(submissionDir + "/" + storedFileName)
+                .filePath(cloudinaryUrl)
                 .note(note)
                 .submissionType(Submission.SubmissionType.FILE)
                 .submittedAt(LocalDateTime.now())
                 .build();
 
         return mapToResponse(submissionRepository.save(submission));
+    }
+
+    /**
+     * Lưu file local (fallback khi không có Cloudinary)
+     */
+    private String saveFileLocally(MultipartFile file, String extension) {
+        try {
+            String storedFileName = UUID.randomUUID() + extension;
+            java.nio.file.Path uploadPath = java.nio.file.Paths.get(submissionDir);
+            java.nio.file.Files.createDirectories(uploadPath);
+            java.nio.file.Files.copy(file.getInputStream(),
+                    uploadPath.resolve(storedFileName),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return submissionDir + "/" + storedFileName;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to store file: " + e.getMessage());
+        }
     }
 
     @Override

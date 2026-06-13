@@ -69,4 +69,23 @@ public class JWTProvider {
             return false;
         }
     }
+
+    /**
+     * FR-03: Lấy thời gian hết hạn của token (milliseconds còn lại)
+     */
+    public long getExpirationFromToken(String token) {
+        try {
+            Date expiration = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getExpiration();
+
+            long remainingMs = expiration.getTime() - System.currentTimeMillis();
+            return Math.max(remainingMs, 0);
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 }

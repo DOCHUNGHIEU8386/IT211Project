@@ -12,6 +12,7 @@ import com.example.it211project.service.RefreshTokenService;
 import com.example.it211project.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final UserService userService;
@@ -32,11 +34,6 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
 
-    // ==================== FR-04: Đăng ký ====================
-    /**
-     * POST /api/v1/auth/register
-     * Đăng ký tài khoản sinh viên mới
-     */
     @PostMapping("/register")
     public ResponseEntity<ApiDataResponse<UserResponse>> register(
             @Valid @RequestBody RegisterRequest request) {
@@ -55,11 +52,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-01: Đăng nhập – Cấp phát JWT ====================
-    /**
-     * POST /api/v1/auth/login
-     * Trả về accessToken + refreshToken
-     */
     @PostMapping("/login")
     public ResponseEntity<ApiDataResponse<TokenResponse>> login(
             @Valid @RequestBody LoginRequest request) {
@@ -74,7 +66,6 @@ public class AuthController {
 
         String accessToken = jwtProvider.generateToken(authentication);
 
-        // Lấy User entity để tạo refresh token
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow();
 
@@ -97,11 +88,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-02: Xoay vòng Token ====================
-    /**
-     * POST /api/v1/auth/refresh-token
-     * Gửi refreshToken cũ -> nhận accessToken + refreshToken mới
-     */
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiDataResponse<TokenResponse>> refreshToken(
             @Valid @RequestBody RefreshTokenRequest request) {
@@ -119,12 +105,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-03: Đăng xuất (Revoke Token) ====================
-    /**
-     * POST /api/v1/auth/logout
-     * Revoke toàn bộ refresh token của user hiện tại
-     * Header: Authorization: Bearer <accessToken>
-     */
     @PostMapping("/logout")
     public ResponseEntity<ApiDataResponse<String>> logout(
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -133,6 +113,8 @@ public class AuthController {
                 .orElseThrow();
 
         refreshTokenService.revokeAllTokensForUser(user);
+
+        log.info("User {} logged out", user.getUsername());
 
         return ResponseEntity.ok(
                 new ApiDataResponse<>(
@@ -145,11 +127,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-10: Đổi mật khẩu ====================
-    /**
-     * POST /api/v1/auth/change-password
-     * Yêu cầu đăng nhập (Bearer token)
-     */
     @PostMapping("/change-password")
     public ResponseEntity<ApiDataResponse<String>> changePassword(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -171,11 +148,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-10: Quên mật khẩu ====================
-    /**
-     * POST /api/v1/auth/forgot-password
-     * Gửi email chứa reset link (không cần đăng nhập)
-     */
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiDataResponse<String>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
@@ -193,11 +165,6 @@ public class AuthController {
         );
     }
 
-    // ==================== FR-10: Reset mật khẩu ====================
-    /**
-     * POST /api/v1/auth/reset-password
-     * Dùng reset token từ email để đặt lại mật khẩu
-     */
     @PostMapping("/reset-password")
     public ResponseEntity<ApiDataResponse<String>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
